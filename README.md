@@ -42,27 +42,74 @@ CLAUDE_MANAGED_ENVIRONMENT_ID=your_environment_id
 PORT=3035
 ```
 
-## How the application was developed
+## How the app was build
 
-The browser collects inputs; the Node host validates requests; the lesson implementation produces observable evidence. The architecture page walks through the real source with numbered steps, prerequisite configuration, source filenames and code excerpts.
+### 1. Block fallback while the first worker is unsettled
 
-### Lesson implementation
+The existing attempt must be settled before another route is considered. Unknown remote state is unconfirmed rather than an invitation to create a second worker.
 
-[src/lesson.ts](https://github.com/luiscoco/Udemy-claude-managed-agents-lesson-c35-app/blob/main/src/lesson.ts)
+Source: [src/lesson.ts](src/lesson.ts#L13) · selected statements
 
 ```typescript
-  async run(input) {
+const expected = "42",
+  state = text(input, "lightState");
 
-const expected="42",state=text(input,"lightState");
-if(state!=="settled")return report("unconfirmed","Reconcile the existing worker before a fallback",{attempts:1,confidenceUsedAsGate:false},["Admit a light attempt","Block cascading while remote state is uncertain"]);
-const first=text(input,"lightAnswer").trim()===expected,second=text(input,"deepAnswer").trim()===expected;
-return report(first||second?"passed":"rejected","Selected a route using host-verified correctness",{attempts:first?1:2,acceptedTier:first?"light":second?"deep":null,reportedConfidence:number(input,"confidence"),confidenceUsedAsGate:false},["Keep the answer key out of worker context","Verify independently","Escalate only after the previous attempt settles"]);
-
-  }
-};
+if (state !== "settled")
+  return report(
+    "unconfirmed",
+    "Reconcile the existing worker before a fallback",
+    { attempts: 1, confidenceUsedAsGate: false },
+    ["Admit a light attempt", "Block cascading while remote state is uncertain"],
+  );
 ```
 
-Read the architecture page for the remaining source excerpts and explanations, including input handling and optional provider behavior. The diagram describes this application, rather than implying that an external integration has been implemented.
+### 2. Select a tier using host-checked correctness
+
+Answers are compared with the local answer key. Reported confidence is retained as evidence but never controls acceptance; the reducer plans one or two attempts without launching either worker.
+
+Source: [src/lesson.ts](src/lesson.ts#L15) · selected statements
+
+```typescript
+const first = text(input, "lightAnswer").trim() === expected,
+  second = text(input, "deepAnswer").trim() === expected;
+
+return report(
+  first || second ? "passed" : "rejected",
+  "Selected a route using host-verified correctness",
+  {
+    attempts: first ? 1 : 2,
+    acceptedTier: first ? "light" : second ? "deep" : null,
+    reportedConfidence: number(input, "confidence"),
+    confidenceUsedAsGate: false,
+  },
+  [
+    "Keep the answer key out of worker context",
+    "Verify independently",
+    "Escalate only after the previous attempt settles",
+  ],
+);
+```
+
+### Check your understanding
+
+Run **Escalate an incorrect light result** in the application. Compare the result with these scenario expectations:
+
+```json
+{
+  "input": {
+    "lightAnswer": "41",
+    "deepAnswer": "42",
+    "lightState": "settled",
+    "confidence": 0.99
+  },
+  "expectedOutcome": "passed",
+  "checkEvidence": {
+    "attempts": 2
+  }
+}
+```
+
+Then try **Do not duplicate an uncertain worker**. Its expected outcome is `unconfirmed`; identify the condition or evidence field that explains the difference.
 
 ## Validation
 
