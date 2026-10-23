@@ -1,0 +1,46 @@
+import {z} from "zod";
+export const TaskReport=z.strictObject({answer:z.string().trim().min(1).max(2000),confidence:z.number().min(0).max(1)});
+export function evaluateRoute(rawText:string,expectedKey:string) {
+  if (!expectedKey.trim()) throw new Error("Independent host answer key required");
+  if (rawText.length>16000) return {verified:false,reason:"Report too large"};
+  let json:unknown;
+  try {json=JSON.parse(rawText);} catch {return {verified:false,reason:"Invalid JSON"};}
+  const result=TaskReport.safeParse(json);
+  if (!result.success) return {verified:false,reason:"Schema validation failed"};
+  // This LAB answer domain is case-insensitive text. Use a domain-specific checker elsewhere.
+  const verified=result.data.answer.toLowerCase()===expectedKey.trim().toLowerCase();
+  return {verified,confidence:result.data.confidence};
+}
+type Tier="light"|"deep";
+type Attempt={sessionId:string;state:"settled"|"paused"|"uncertain";rawText:string;costCents:number|null};
+export async function boundedCascade(task:{id:string;prompt:string;expectedKey:string},
+  attempt:(tier:Tier,input:{taskId:string;prompt:string})=>Promise<Attempt>) {
+  const attempts:Attempt[]=[];
+  for (const tier of ["light","deep"] as const) {
+    // Port enforces admission budget/reservations and opens a fresh pinned session each time.
+    const run=await attempt(tier,{taskId:task.id,prompt:task.prompt});
+    if (attempts.some(a=>a.sessionId===run.sessionId)) throw new Error("Escalation must use a fresh session");
+    attempts.push(run);
+    if (run.state!=="settled") return {verified:false,status:run.state,attempts};
+    const checked=evaluateRoute(run.rawText,task.expectedKey);
+    if (checked.verified) return {verified:true,status:"verified",attempts};
+  }
+  return {verified:false,status:"checks-failed",attempts};
+}
+export function summarizeCosts(attempts:readonly {costCents:number|null;role:"solver"|"classifier"|"reviewer"}[],correctTasks:number) {
+  if (!Number.isSafeInteger(correctTasks) || correctTasks<0) throw new Error("Valid verified task count required");
+  const known=attempts.every(a=>a.costCents!==null && Number.isSafeInteger(a.costCents) && a.costCents>=0);
+  const totalCents=known?attempts.reduce((sum,a)=>sum+a.costCents!,0):null;
+  return {sessions:attempts.length,totalCents,centsPerCorrect:totalCents!==null && correctTasks>0 ? totalCents/correctTasks : null};
+}
+export function admitNext(observedCents:number|null,reservedCents:number,nextReservation:number,cap:number) {
+  return observedCents!==null && [observedCents,reservedCents,nextReservation,cap].every(n=>Number.isSafeInteger(n)&&n>=0) &&
+    observedCents+reservedCents+nextReservation<=cap;
+}
+// Keep the answer key HOST-ONLY. The attempt port receives task ID and prompt, never expectedKey.
+// Confidence can be logged; it never decides verified correctness or escalation here.
+// The attempt port must also enforce independent session budgets, deadlines, admission and cleanup.
+// Paused/uncertain runs block cascade fallback; an unknown live worker must not be duplicated.
+// Reservations/illustrative fixture costs do not guarantee the actual provider invoice/cap is exact.
+// Count classifier, reviewer, failed and incomplete attempts. Missing cost is unknown, not free.
+// Native delegation/advisor choices are different from changing a primary session model in place.

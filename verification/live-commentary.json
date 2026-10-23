@@ -1,0 +1,29 @@
+{
+  "source": "live-provider-commentary",
+  "sessionId": "sesn_018Ch6Wo2Fh3783vBXhqFJF7",
+  "answer": "This local experiment, called **\"Routing with Verified Outcomes,\"** tests a routing strategy where an answer key is kept out of the worker's context and correctness is verified independently by the host. It took two attempts before accepting a \"deep\" tier response, with a reported confidence of 0.99 that was logged but not used as a gating condition. The core lesson is to let each attempt fully settle before escalating, rather than routing based on self-reported confidence alone.",
+  "stopReason": "end_turn",
+  "eventTypes": [
+    "session.status_running",
+    "session.thread_status_running",
+    "user.message",
+    "span.model_request_start",
+    "agent.thinking",
+    "agent.message",
+    "span.model_request_end",
+    "session.thread_status_idle",
+    "session.usage",
+    "session.status_idle"
+  ],
+  "requestUsage": [
+    {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 594,
+      "output_tokens": 136,
+      "speed": "standard"
+    }
+  ],
+  "experimentHash": "e6cb95b158cdd963612ad1229c578e7e4123c4cd34bb4b76714072049ffd827c",
+  "scope": "A real text-only model response about the local experiment. External integrations and the experiment's correctness are not certified by this response."
+}
